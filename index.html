@@ -363,252 +363,279 @@
     </div>
 
     <script>
-        // Core In-Memory State
-        let state = {
-            settings: {
-                buildingName: "Skyline Heights",
-                waterRate: 120,
-                garbageFee: 500,
-                sewerFee: 300
-            },
-            tenants: [
-                { unit: "A01", name: "Melvin Wanjiru", phone: "0712345678", lastReading: 1500, status: "Occupied" },
-                { unit: "B02", name: "Jane Doe", phone: "0722111222", lastReading: 840, status: "Occupied" },
-                { unit: "C03", name: "John Smith", phone: "0733444555", lastReading: 310, status: "Vacant" }
-            ],
-            bills: []
-        };
+// Core In-Memory State
+let state = {
+    settings: {
+        buildingName: "Skyline Heights",
+        waterRate: 120,
+        garbageFee: 500,
+        sewerFee: 300
+    },
+    tenants: [
+        { unit: "A01", name: "Melvin Wanjiru", phone: "0712345678", lastReading: 1500, status: "Occupied" },
+        { unit: "B02", name: "Jane Doe", phone: "0722111222", lastReading: 840, status: "Occupied" },
+        { unit: "C03", name: "John Smith", phone: "0733444555", lastReading: 310, status: "Vacant" }
+    ],
+    bills: []
+};
 
-        // Initialize App & Load from localStorage if exists
-        window.addEventListener('load', () => {
-            const savedState = localStorage.getItem('hydrobill_state');
-            if(savedState) {
-                try {
-                    state = JSON.parse(savedState);
-                } catch(e) { console.error("Error reading saved local storage profile state data.", e); }
+// Initialize App & Load from localStorage if exists
+window.addEventListener('DOMContentLoaded', () => {
+    const savedState = localStorage.getItem('hydrobill_state');
+    if(savedState) {
+        try {
+            state = JSON.parse(savedState);
+        } catch(e) { 
+            console.error("Error reading saved local storage profile state data.", e); 
+        }
+    }
+    applySettingsToUI();
+    renderAll();
+    setupNavigationListeners(); // Wire up navigation explicitly
+});
+
+function saveStateToStorage() {
+    localStorage.setItem('hydrobill_state', JSON.stringify(state));
+    renderAll();
+}
+
+function applySettingsToUI() {
+    document.getElementById('header-building-name').innerText = state.settings.buildingName;
+    document.getElementById('set-building').value = state.settings.buildingName;
+    document.getElementById('set-rate').value = state.settings.waterRate;
+    document.getElementById('set-garbage').value = state.settings.garbageFee;
+    document.getElementById('set-sewer').value = state.settings.sewerFee;
+}
+
+// Robust modern navigation handler
+function setupNavigationListeners() {
+    const navButtons = document.querySelectorAll('.nav-btn');
+    navButtons.forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            // Prevent default behavior if inside a form/link context
+            event.preventDefault();
+            
+            // Remove active class from all buttons and sections
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+            
+            // Add active class to clicked button
+            btn.classList.add('active');
+            
+            // Extract view name from the button text content or position
+            const btnText = btn.textContent.trim().toLowerCase();
+            let viewId = 'view-dashboard';
+            
+            if (btnText.includes('tenants')) viewId = 'view-tenants';
+            else if (btnText.includes('readings') || btnText.includes('bills')) viewId = 'view-billing';
+            else if (btnText.includes('settings')) viewId = 'view-settings';
+            
+            // Show the target section
+            const targetSection = document.getElementById(viewId);
+            if (targetSection) {
+                targetSection.classList.add('active');
+                window.scrollTo(0, 0); // Scroll to top for seamless mobile switching
             }
-            applySettingsToUI();
-            renderAll();
+        });
+    });
+}
+
+function renderAll() {
+    // Render Stats
+    document.getElementById('stat-total-units').innerText = state.tenants.length;
+    document.getElementById('stat-occupied-units').innerText = state.tenants.filter(t => t.status === "Occupied").length;
+    document.getElementById('stat-pending-bills').innerText = state.bills.filter(b => b.status === "Unpaid").length;
+    
+    const totalOwed = state.bills.filter(b => b.status === "Unpaid").reduce((acc, b) => acc + b.amountDue, 0);
+    document.getElementById('stat-total-owed').innerText = totalOwed.toLocaleString();
+
+    // Render Dashboard Table
+    const dashTableBody = document.querySelector('#table-dashboard-bills tbody');
+    if (dashTableBody) {
+        dashTableBody.innerHTML = state.bills.length === 0 ? '<tr><td colspan="5" style="text-align:center; color:#64748b;">No billing loops recorded yet.</td></tr>' : '';
+        state.bills.forEach(b => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${b.unit}</strong></td>
+                <td>${b.name}</td>
+                <td>${b.month}</td>
+                <td>KES ${b.amountDue.toLocaleString()}</td>
+                <td><span class="badge ${b.status === 'Paid' ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleBillPaid('${b.id}')">${b.status}</span></td>
+            `;
+            dashTableBody.appendChild(tr);
+        });
+    }
+
+    // Render Tenants Management Table
+    const tenantsTableBody = document.querySelector('#table-tenants tbody');
+    if (tenantsTableBody) {
+        tenantsTableBody.innerHTML = '';
+        state.tenants.forEach(t => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${t.unit}</strong></td>
+                <td>${t.name}</td>
+                <td>${t.phone}</td>
+                <td><span class="badge ${t.status === 'Occupied' ? 'badge-success' : 'badge-warning'}">${t.status}</span></td>
+            `;
+            tenantsTableBody.appendChild(tr);
+        });
+    }
+
+    // Render Meter Reading Fields Dynamic List
+    const readingsList = document.getElementById('readings-entry-list');
+    if (readingsList) {
+        readingsList.innerHTML = '';
+        const occupiedTenants = state.tenants.filter(t => t.status === "Occupied");
+        
+        if(occupiedTenants.length === 0) {
+            readingsList.innerHTML = '<p style="color:#64748b; text-align:center;">Add active occupied tenant records first to log water usage metrics.</p>';
+        }
+
+        occupiedTenants.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'reading-row';
+            div.id = `row-reading-${t.unit}`;
+            div.innerHTML = `
+                <div style="font-weight:600; margin-bottom:0.5rem; color:#0f172a;">Unit ${t.unit} - ${t.name}</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748b; display:block; margin-bottom:0.25rem;">Previous Reading</span>
+                        <input type="number" class="form-control" value="${t.lastReading}" disabled>
+                    </div>
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748b; display:block; margin-bottom:0.25rem;">Current Reading</span>
+                        <input type="number" id="input-curr-${t.unit}" class="form-control" placeholder="Enter here" oninput="highlightActiveEntry('${t.unit}')">
+                    </div>
+                </div>
+            `;
+            readingsList.appendChild(div);
+        });
+    }
+}
+
+function highlightActiveEntry(unit) {
+    const row = document.getElementById(`row-reading-${unit}`);
+    const inputVal = document.getElementById(`input-curr-${unit}`).value;
+    if(row) {
+        if(inputVal) row.classList.add('active-entry');
+        else row.classList.remove('active-entry');
+    }
+}
+
+function addTenant(e) {
+    e.preventDefault();
+    const unit = document.getElementById('tenant-unit').value.toUpperCase();
+    const name = document.getElementById('tenant-name').value;
+    const phone = document.getElementById('tenant-phone').value;
+    const reading = parseInt(document.getElementById('tenant-reading').value) || 0;
+    const status = document.getElementById('tenant-status').value;
+
+    state.tenants.push({ unit, name, phone, lastReading: reading, status });
+    document.getElementById('form-add-tenant').reset();
+    saveStateToStorage();
+    alert(`Tenant record for unit ${unit} saved successfully inside local index.`);
+}
+
+function generateAllBills() {
+    const currentMonthStr = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    let generatedAny = false;
+    const pipelineList = document.getElementById('whatsapp-pipeline-list');
+    pipelineList.innerHTML = '';
+
+    state.tenants.forEach(t => {
+        if(t.status !== "Occupied") return;
+        const currInput = document.getElementById(`input-curr-${t.unit}`);
+        if(!currInput || !currInput.value) return;
+
+        const currentVal = parseInt(currInput.value);
+        if(currentVal < t.lastReading) {
+            alert(`Error validation check for Unit ${t.unit}: Current values cannot drop below previous threshold historical indexes.`);
+            return;
+        }
+
+        const consumption = currentVal - t.lastReading;
+        const waterCost = consumption * state.settings.waterRate;
+        const totalDue = waterCost + state.settings.garbageFee + state.settings.sewerFee;
+
+        const invoiceId = 'INV-' + Date.now() + '-' + t.unit;
+
+        state.bills.unshift({
+            id: invoiceId,
+            unit: t.unit,
+            name: t.name,
+            phone: t.phone,
+            month: currentMonthStr,
+            prevReading: t.lastReading,
+            currReading: currentVal,
+            consumption: consumption,
+            amountDue: totalDue,
+            status: "Unpaid"
         });
 
-        function saveStateToStorage() {
-            localStorage.setItem('hydrobill_state', JSON.stringify(state));
-            renderAll();
-        }
+        t.lastReading = currentVal;
+        generatedAny = true;
 
-        function applySettingsToUI() {
-            document.getElementById('header-building-name').innerText = state.settings.buildingName;
-            document.getElementById('set-building').value = state.settings.buildingName;
-            document.getElementById('set-rate').value = state.settings.waterRate;
-            document.getElementById('set-garbage').value = state.settings.garbageFee;
-            document.getElementById('set-sewer').value = state.settings.sewerFee;
-        }
+        const msgText = `Dear Tenant, Your ${currentMonthStr} water bill has been generated.\\n` +
+                        `Unit: ${t.unit}\\n` +
+                        `Consumption: ${consumption} Units (${t.prevReading} to ${currentVal})\\n` +
+                        `Water Cost: KES ${waterCost.toLocaleString()}\\n` +
+                        `Garbage: KES ${state.settings.garbageFee}\\n` +
+                        `Sewer: KES ${state.settings.sewerFee}\\n` +
+                        `Total Amount Due: KES ${totalDue.toLocaleString()}\\n` +
+                        `Kindly settle promptly. Thank you.`;
 
-        function switchView(viewName) {
-            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
-            
-            document.getElementById('view-' + viewName).classList.add('active');
-            event.currentTarget.classList.add('active');
-        }
+        const encodedMsg = encodeURIComponent(msgText.replace(/\\n/g, '\n'));
+        const whatsappUrl = `https://wa.me/${t.phone}?text=${encodedMsg}`;
 
-        function renderAll() {
-            // Render Stats
-            document.getElementById('stat-total-units').innerText = state.tenants.length;
-            document.getElementById('stat-occupied-units').innerText = state.tenants.filter(t => t.status === "Occupied").length;
-            document.getElementById('stat-pending-bills').innerText = state.bills.filter(b => b.status === "Unpaid").length;
-            
-            const totalOwed = state.bills.filter(b => b.status === "Unpaid").reduce((acc, b) => acc + b.amountDue, 0);
-            document.getElementById('stat-total-owed').innerText = totalOwed.toLocaleString();
+        const box = document.createElement('div');
+        box.className = 'whatsapp-box';
+        box.innerHTML = `
+            <div style="font-weight:600; color:#16a34a; margin-bottom:0.5rem;">📱 Ready for Unit ${t.unit} (${t.name})</div>
+            <pre>${msgText.replace(/\\n/g, '\n')}</pre>
+            <a href="${whatsappUrl}" target="_blank" class="btn btn-whatsapp" style="text-decoration:none;">Launch WhatsApp Dispatch Link</a>
+        `;
+        pipelineList.appendChild(box);
+    });
 
-            // Render Dashboard Table
-            const dashTableBody = document.querySelector('#table-dashboard-bills tbody');
-            dashTableBody.innerHTML = state.bills.length === 0 ? '<tr><td colspan="5" style="text-align:center; color:#64748b;">No billing loops recorded yet.</td></tr>' : '';
-            state.bills.forEach(b => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${b.unit}</strong></td>
-                    <td>${b.name}</td>
-                    <td>${b.month}</td>
-                    <td>KES ${b.amountDue.toLocaleString()}</td>
-                    <td><span class="badge ${b.status === 'Paid' ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleBillPaid('${b.id}')">${b.status}</span></td>
-                `;
-                dashTableBody.appendChild(tr);
-            });
+    if(generatedAny) {
+        document.getElementById('card-whatsapp-notifications').style.display = 'block';
+        saveStateToStorage();
+        alert(`Invoices built cleanly! Review the generated dispatch automation templates below.`);
+    } else {
+        alert("Please ensure you fill out at least one current month meter field coordinate value.");
+    }
+}
 
-            // Render Tenants Management Table
-            const tenantsTableBody = document.querySelector('#table-tenants tbody');
-            tenantsTableBody.innerHTML = '';
-            state.tenants.forEach(t => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${t.unit}</strong></td>
-                    <td>${t.name}</td>
-                    <td>${t.phone}</td>
-                    <td><span class="badge ${t.status === 'Occupied' ? 'badge-success' : 'badge-warning'}">${t.status}</span></td>
-                `;
-                tenantsTableBody.appendChild(tr);
-            });
+function toggleBillPaid(billId) {
+    const bill = state.bills.find(b => b.id === billId);
+    if(bill) {
+        bill.status = bill.status === "Paid" ? "Unpaid" : "Paid";
+        saveStateToStorage();
+    }
+}
 
-            // Render Meter Reading Fields Dynamic List
-            const readingsList = document.getElementById('readings-entry-list');
-            readingsList.innerHTML = '';
-            const occupiedTenants = state.tenants.filter(t => t.status === "Occupied");
-            
-            if(occupiedTenants.length === 0) {
-                readingsList.innerHTML = '<p style="color:#64748b; text-align:center;">Add active occupied tenant records first to log water usage metrics.</p>';
-            }
+function saveSettings(e) {
+    e.preventDefault();
+    state.settings.buildingName = document.getElementById('set-building').value;
+    state.settings.waterRate = parseInt(document.getElementById('set-rate').value) || 0;
+    state.settings.garbageFee = parseInt(document.getElementById('set-garbage').value) || 0;
+    state.settings.sewerFee = parseInt(document.getElementById('set-sewer').value) || 0;
+    
+    saveStateToStorage();
+    applySettingsToUI();
+    alert("Application properties state synced successfully.");
+}
 
-            occupiedTenants.forEach(t => {
-                const div = document.createElement('div');
-                div.className = 'reading-row';
-                div.id = `row-reading-${t.unit}`;
-                div.innerHTML = `
-                    <div style="font-weight:600; margin-bottom:0.5rem; color:#0f172a;">Unit ${t.unit} - ${t.name}</div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
-                        <div>
-                            <span style="font-size:0.75rem; color:#64748b; display:block; margin-bottom:0.25rem;">Previous Reading</span>
-                            <input type="number" class="form-control" value="${t.lastReading}" disabled>
-                        </div>
-                        <div>
-                            <span style="font-size:0.75rem; color:#64748b; display:block; margin-bottom:0.25rem;">Current Reading</span>
-                            <input type="number" id="input-curr-${t.unit}" class="form-control" placeholder="Enter here" oninput="highlightActiveEntry('${t.unit}')">
-                        </div>
-                    </div>
-                `;
-                readingsList.appendChild(div);
-            });
-        }
-
-        function highlightActiveEntry(unit) {
-            const row = document.getElementById(`row-reading-${unit}`);
-            const inputVal = document.getElementById(`input-curr-${unit}`).value;
-            if(inputVal) {
-                row.classList.add('active-entry');
-            } else {
-                row.classList.remove('active-entry');
-            }
-        }
-
-        function addTenant(e) {
-            e.preventDefault();
-            const unit = document.getElementById('tenant-unit').value.toUpperCase();
-            const name = document.getElementById('tenant-name').value;
-            const phone = document.getElementById('tenant-phone').value;
-            const reading = parseInt(document.getElementById('tenant-reading').value) || 0;
-            const status = document.getElementById('tenant-status').value;
-
-            state.tenants.push({ unit, name, phone, lastReading: reading, status });
-            document.getElementById('form-add-tenant').reset();
-            saveStateToStorage();
-            alert(`Tenant record for unit ${unit} saved successfully inside local index.`);
-        }
-
-        function generateAllBills() {
-            const currentMonthStr = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-            let generatedAny = false;
-            const pipelineList = document.getElementById('whatsapp-pipeline-list');
-            pipelineList.innerHTML = '';
-
-            state.tenants.forEach(t => {
-                if(t.status !== "Occupied") return;
-                const currInput = document.getElementById(`input-curr-${t.unit}`);
-                if(!currInput || !currInput.value) return;
-
-                const currentVal = parseInt(currInput.value);
-                if(currentVal < t.lastReading) {
-                    alert(`Error validation check for Unit ${t.unit}: Current values cannot drop below previous threshold historical indexes.`);
-                    return;
-                }
-
-                const consumption = currentVal - t.lastReading;
-                const waterCost = consumption * state.settings.waterRate;
-                const totalDue = waterCost + state.settings.garbageFee + state.settings.sewerFee;
-
-                // Unique invoice key
-                const invoiceId = 'INV-' + Date.now() + '-' + t.unit;
-
-                // Push inside global array state
-                state.bills.unshift({
-                    id: invoiceId,
-                    unit: t.unit,
-                    name: t.name,
-                    phone: t.phone,
-                    month: currentMonthStr,
-                    prevReading: t.lastReading,
-                    currReading: currentVal,
-                    consumption: consumption,
-                    amountDue: totalDue,
-                    status: "Unpaid"
-                });
-
-                // Update tenant last reading baseline
-                t.lastReading = currentVal;
-                generatedAny = true;
-
-                // Render out corresponding notification element card structures
-                const msgText = `Dear Tenant, Your ${currentMonthStr} water bill has been generated.\n` +
-                                `Unit: ${t.unit}\n` +
-                                `Consumption: ${consumption} Units (${t.prevReading} to ${currentVal})\n` +
-                                `Water Cost: KES ${waterCost.toLocaleString()}\n` +
-                                `Garbage: KES ${state.settings.garbageFee}\n` +
-                                `Sewer: KES ${state.settings.sewerFee}\n` +
-                                `Total Amount Due: KES ${totalDue.toLocaleString()}\n` +
-                                `Kindly settle promptly. Thank you.`;
-
-                const encodedMsg = encodeURIComponent(msgText.replace(/\n/g, '
-'));
-                const whatsappUrl = `https://wa.me/${t.phone}?text=${encodedMsg}`;
-
-                const box = document.createElement('div');
-                box.className = 'whatsapp-box';
-                box.innerHTML = `
-                    <div style="font-weight:600; color:#16a34a; margin-bottom:0.5rem;">📱 Ready for Unit ${t.unit} (${t.name})</div>
-                    <pre>${msgText.replace(/\n/g, '
-')}</pre>
-                    <a href="${whatsappUrl}" target="_blank" class="btn btn-whatsapp" style="text-decoration:none;">Launch WhatsApp Dispatch Link</a>
-                `;
-                pipelineList.appendChild(box);
-            });
-
-            if(generatedAny) {
-                document.getElementById('card-whatsapp-notifications').style.display = 'block';
-                saveStateToStorage();
-                alert(`Invoices built cleanly! Review the generated dispatch automation templates below.`);
-            } else {
-                alert("Please ensure you fill out at least one current month meter field coordinate value.");
-            }
-        }
-
-        function toggleBillPaid(billId) {
-            const bill = state.bills.find(b => b.id === billId);
-            if(bill) {
-                bill.status = bill.status === "Paid" ? "Unpaid" : "Paid";
-                saveStateToStorage();
-            }
-        }
-
-        function saveSettings(e) {
-            e.preventDefault();
-            state.settings.buildingName = document.getElementById('set-building').value;
-            state.settings.waterRate = parseInt(document.getElementById('set-rate').value) || 0;
-            state.settings.garbageFee = parseInt(document.getElementById('set-garbage').value) || 0;
-            state.settings.sewerFee = parseInt(document.getElementById('set-sewer').value) || 0;
-            
-            saveStateToStorage();
-            applySettingsToUI();
-            alert("Application properties state synced successfully.");
-        }
-
-        function exportLocalBackup() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", "hydrobill_backup_" + new Date().toISOString().slice(0,10) + ".json");
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-        }
+function exportLocalBackup() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "hydrobill_backup_" + new Date().toISOString().slice(0,10) + ".json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}        
     </script>
 </body>
 </html>
