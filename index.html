@@ -572,21 +572,88 @@
         }
 
         function generateAllBills() {
-            const currentMonthStr = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-            let generatedAny = false;
-            const pipelineList = document.getElementById('whatsapp-pipeline-list');
-            pipelineList.innerHTML = '';
+    const currentMonthStr = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    let generatedAny = false;
+    const pipelineList = document.getElementById('whatsapp-pipeline-list');
+    pipelineList.innerHTML = '';
 
-            state.tenants.forEach(t => {
-                if(t.status !== "Occupied") return;
-                const currInput = document.getElementById(`input-curr-${t.unit}`);
-                if(!currInput || !currInput.value) return;
+    state.tenants.forEach(t => {
+        if(t.status !== "Occupied") return;
+        const currInput = document.getElementById(`input-curr-${t.unit}`);
+        if(!currInput || !currInput.value) return;
 
-                const currentVal = parseInt(currInput.value);
-                if(currentVal < t.lastReading) {
-                    alert(`Error validation check for Unit ${t.unit}: Current values cannot drop below previous threshold historical indexes.`);
-                    return;
-                }
+        const currentVal = parseInt(currInput.value);
+        if(currentVal < t.lastReading) {
+            alert(`Error validation check for Unit ${t.unit}: Current values cannot drop below previous threshold historical indexes.`);
+            return;
+        }
+
+        const consumption = currentVal - t.lastReading;
+        const waterCost = consumption * state.settings.waterRate;
+        const totalDue = waterCost + state.settings.garbageFee + state.settings.sewerFee;
+
+        const invoiceId = 'INV-' + Date.now() + '-' + t.unit;
+
+        state.bills.unshift({
+            id: invoiceId,
+            unit: t.unit,
+            name: t.name,
+            phone: t.phone,
+            month: currentMonthStr,
+            prevReading: t.lastReading,
+            currReading: currentVal,
+            consumption: consumption,
+            amountDue: totalDue,
+            status: "Unpaid"
+        });
+
+        t.lastReading = currentVal;
+        generatedAny = true;
+
+        // --- NEW WHATSAPP PHONE NUMBER SANITIZATION LOGIC ---
+        // Strip out spaces, dashes, parentheses, or plus signs a user might type
+        let cleanPhone = t.phone.replace(/[\s\-\(\)\+]/g, '');
+
+        // If the number starts with a local zero (e.g., 0712345678), swap it for 254
+        if (cleanPhone.startsWith('0')) {
+            cleanPhone = '254' + cleanPhone.substring(1);
+        } 
+        // If it starts with a 7 or 1 without a country code (e.g., 712345678), add 254
+        else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
+            cleanPhone = '254' + cleanPhone;
+        }
+        // ----------------------------------------------------
+
+        const msgText = `Dear Tenant, Your ${currentMonthStr} water bill has been generated.\\n` +
+                        `Unit: ${t.unit}\\n` +
+                        `Consumption: ${consumption} Units (${t.prevReading} to ${currentVal})\\n` +
+                        `Water Cost: KES ${waterCost.toLocaleString()}\\n` +
+                        `Garbage: KES ${state.settings.garbageFee}\\n` +
+                        `Sewer: KES ${state.settings.sewerFee}\\n` +
+                        `Total Amount Due: KES ${totalDue.toLocaleString()}\\n` +
+                        `Kindly settle promptly. Thank you.`;
+
+        const encodedMsg = encodeURIComponent(msgText.replace(/\\n/g, '\n'));
+        const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMsg}`;
+
+        const box = document.createElement('div');
+        box.className = 'whatsapp-box';
+        box.innerHTML = `
+            <div style="font-weight:600; color:#16a34a; margin-bottom:0.5rem;">📱 Ready for Unit ${t.unit} (${t.name})</div>
+            <pre>${msgText.replace(/\\n/g, '\n')}</pre>
+            <a href="${whatsappUrl}" target="_blank" class="btn btn-whatsapp" style="text-decoration:none;">Launch WhatsApp Dispatch Link</a>
+        `;
+        pipelineList.appendChild(box);
+    });
+
+    if(generatedAny) {
+        document.getElementById('card-whatsapp-notifications').style.display = 'block';
+        saveStateToStorage();
+        alert(`Invoices built cleanly! Review the generated dispatch automation templates below.`);
+    } else {
+        alert("Please ensure you fill out at least one current month meter field coordinate value.");
+    }
+}
 
                 const consumption = currentVal - t.lastReading;
                 const waterCost = consumption * state.settings.waterRate;
