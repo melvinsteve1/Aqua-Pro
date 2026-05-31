@@ -1,0 +1,16 @@
+{
+  "short_name": "HydroBill",
+  "name": "Property Water Billing System",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjI1NiIgZmlsbD0iIzAyODRjNyIvPjxwYXRoIGQ9Ik0yNTYgMTI4YzAgMCA5NiAxMjggOTYgMTkycz00MyA5Ni05NiA5NnMtOTYtNDMtOTYtOTZzOTYtMTkyIDk2LTE5Mnoi fill="white"/></svg>",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#f8fafc",
+  "theme_color": "#0284c7",
+  "display": "standalone",
+  "orientation": "portrait"
+}
