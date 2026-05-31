@@ -571,7 +571,7 @@
             }
         }
 
-        function generateAllBills() {
+function generateAllBills() {
     const currentMonthStr = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
     let generatedAny = false;
     const pipelineList = document.getElementById('whatsapp-pipeline-list');
@@ -610,7 +610,7 @@
         t.lastReading = currentVal;
         generatedAny = true;
 
-        // 🎯 BULLETPROOF PHONE SANITIZATION
+        // BULLETPROOF PHONE SANITIZATION
         // Strip absolutely everything except raw digits
         let cleanPhone = t.phone.replace(/\D/g, '');
 
