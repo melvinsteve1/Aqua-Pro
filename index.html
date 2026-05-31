@@ -610,37 +610,38 @@
         t.lastReading = currentVal;
         generatedAny = true;
 
-        // --- NEW WHATSAPP PHONE NUMBER SANITIZATION LOGIC ---
-        // Strip out spaces, dashes, parentheses, or plus signs a user might type
-        let cleanPhone = t.phone.replace(/[\s\-\(\)\+]/g, '');
+        // 🎯 BULLETPROOF PHONE SANITIZATION
+        // Strip absolutely everything except raw digits
+        let cleanPhone = t.phone.replace(/\D/g, '');
 
-        // If the number starts with a local zero (e.g., 0712345678), swap it for 254
+        // Case A: User typed a standard local zero entry (e.g., 0712345678)
         if (cleanPhone.startsWith('0')) {
             cleanPhone = '254' + cleanPhone.substring(1);
         } 
-        // If it starts with a 7 or 1 without a country code (e.g., 712345678), add 254
-        else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
+        // Case B: User typed it starting straight with 7 or 1 without code (e.g., 712345678)
+        else if ((cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) && cleanPhone.length === 9) {
             cleanPhone = '254' + cleanPhone;
         }
-        // ----------------------------------------------------
+        // Case C: If it already starts with 254 and is the correct length, leave it alone!
 
-        const msgText = `Dear Tenant, Your ${currentMonthStr} water bill has been generated.\\n` +
-                        `Unit: ${t.unit}\\n` +
-                        `Consumption: ${consumption} Units (${t.prevReading} to ${currentVal})\\n` +
-                        `Water Cost: KES ${waterCost.toLocaleString()}\\n` +
-                        `Garbage: KES ${state.settings.garbageFee}\\n` +
-                        `Sewer: KES ${state.settings.sewerFee}\\n` +
-                        `Total Amount Due: KES ${totalDue.toLocaleString()}\\n` +
+        const msgText = `Dear Tenant, Your ${currentMonthStr} water bill has been generated.\n` +
+                        `Unit: ${t.unit}\n` +
+                        `Consumption: ${consumption} Units (${t.prevReading} to ${currentVal})\n` +
+                        `Water Cost: KES ${waterCost.toLocaleString()}\n` +
+                        `Garbage: KES ${state.settings.garbageFee}\n` +
+                        `Sewer: KES ${state.settings.sewerFee}\n` +
+                        `Total Amount Due: KES ${totalDue.toLocaleString()}\n` +
                         `Kindly settle promptly. Thank you.`;
 
-        const encodedMsg = encodeURIComponent(msgText.replace(/\\n/g, '\n'));
+        // Clean link compilation using modern web safety standard definitions
+        const encodedMsg = encodeURIComponent(msgText);
         const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMsg}`;
 
         const box = document.createElement('div');
         box.className = 'whatsapp-box';
         box.innerHTML = `
             <div style="font-weight:600; color:#16a34a; margin-bottom:0.5rem;">📱 Ready for Unit ${t.unit} (${t.name})</div>
-            <pre>${msgText.replace(/\\n/g, '\n')}</pre>
+            <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.875rem; background: white; padding: 0.75rem; border-radius: 0.375rem; border: 1px solid #e2e8f0; margin-bottom: 0.75rem;">${msgText}</pre>
             <a href="${whatsappUrl}" target="_blank" class="btn btn-whatsapp" style="text-decoration:none;">Launch WhatsApp Dispatch Link</a>
         `;
         pipelineList.appendChild(box);
@@ -654,59 +655,6 @@
         alert("Please ensure you fill out at least one current month meter field coordinate value.");
     }
 }
-
-                const consumption = currentVal - t.lastReading;
-                const waterCost = consumption * state.settings.waterRate;
-                const totalDue = waterCost + state.settings.garbageFee + state.settings.sewerFee;
-
-                const invoiceId = 'INV-' + Date.now() + '-' + t.unit;
-
-                state.bills.unshift({
-                    id: invoiceId,
-                    unit: t.unit,
-                    name: t.name,
-                    phone: t.phone,
-                    month: currentMonthStr,
-                    prevReading: t.lastReading,
-                    currReading: currentVal,
-                    consumption: consumption,
-                    amountDue: totalDue,
-                    status: "Unpaid"
-                });
-
-                t.lastReading = currentVal;
-                generatedAny = true;
-
-                const msgText = `Dear Tenant, Your ${currentMonthStr} water bill has been generated.\\n` +
-                                `Unit: ${t.unit}\\n` +
-                                `Consumption: ${consumption} Units (${t.prevReading} to ${currentVal})\\n` +
-                                `Water Cost: KES ${waterCost.toLocaleString()}\\n` +
-                                `Garbage: KES ${state.settings.garbageFee}\\n` +
-                                `Sewer: KES ${state.settings.sewerFee}\\n` +
-                                `Total Amount Due: KES ${totalDue.toLocaleString()}\\n` +
-                                `Kindly settle promptly. Thank you.`;
-
-                const encodedMsg = encodeURIComponent(msgText.replace(/\\n/g, '\n'));
-                const whatsappUrl = `https://wa.me/${t.phone}?text=${encodedMsg}`;
-
-                const box = document.createElement('div');
-                box.className = 'whatsapp-box';
-                box.innerHTML = `
-                    <div style="font-weight:600; color:#16a34a; margin-bottom:0.5rem;">📱 Ready for Unit ${t.unit} (${t.name})</div>
-                    <pre>${msgText.replace(/\\n/g, '\n')}</pre>
-                    <a href="${whatsappUrl}" target="_blank" class="btn btn-whatsapp" style="text-decoration:none;">Launch WhatsApp Dispatch Link</a>
-                `;
-                pipelineList.appendChild(box);
-            });
-
-            if(generatedAny) {
-                document.getElementById('card-whatsapp-notifications').style.display = 'block';
-                saveStateToStorage();
-                alert(`Invoices built cleanly! Review the generated dispatch automation templates below.`);
-            } else {
-                alert("Please ensure you fill out at least one current month meter field coordinate value.");
-            }
-        }
 
         function toggleBillPaid(billId) {
             const bill = state.bills.find(b => b.id === billId);
