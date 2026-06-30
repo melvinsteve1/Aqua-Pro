@@ -933,34 +933,55 @@
 <script>
 // ==================== SUPABASE CONFIG ====================
 const SUPABASE_URL = "https://ebtioeldbbtrkvdplguf.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOi..."; // ← PUT YOUR REAL ANON KEY HERE
+const SUPABASE_ANON_KEY = "eyJhbGciOi...";   // ← REPLACE WITH YOUR REAL ANON KEY
 
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ========================================================
 
 let state = {
-    settings: { buildingName: "Skyline Heights", standingCharge: 200, waterRate: 120, garbageFee: 500, sewerFee: 300 },
-    tenants: [], bills: [], expenses: [], incomes: []
+    settings: {
+        buildingName: "Skyline Heights",
+        standingCharge: 200, 
+        waterRate: 120,
+        garbageFee: 500,
+        sewerFee: 300
+    },
+    tenants: [],
+    bills: [],
+    expenses: [],
+    incomes: []
 };
 
 let editingTenantIndex = null;
 
-// Cloud Sync
+// Cloud Sync Functions
 async function saveToCloud() {
     try {
         localStorage.setItem('hydrobill_state', JSON.stringify(state));
-        await supabase.from('hydrobill_data').upsert({ id: 1, state_json: state, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-    } catch (e) { console.error("Save failed", e); }
+        const { error } = await supabase
+            .from('hydrobill_data')
+            .upsert({ id: 1, state_json: state, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+        if (!error) console.log("✅ Synced to Supabase");
+    } catch (err) {
+        console.error("Save failed:", err);
+    }
 }
 
 async function loadFromCloud() {
     try {
-        const { data } = await supabase.from('hydrobill_data').select('state_json').eq('id', 1).single();
+        const { data } = await supabase
+            .from('hydrobill_data')
+            .select('state_json')
+            .eq('id', 1)
+            .single();
         return data?.state_json || null;
-    } catch (e) { return null; }
+    } catch (err) {
+        console.warn("Cloud load failed, using local");
+        return null;
+    }
 }
 
-// Navigation Fix
+// Navigation
 function switchView(viewKey) {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
@@ -983,22 +1004,45 @@ function setupNavigationListeners() {
     });
 }
 
-// ==================== INIT ====================
+// Your original functions (kept intact)
+function applySettingsToUI() {
+    document.getElementById('header-building-name').innerText = state.settings.buildingName || "Skyline Heights";
+    document.getElementById('set-building').value = state.settings.buildingName || "Skyline Heights";
+    document.getElementById('set-standing').value = state.settings.standingCharge || 0;
+    document.getElementById('set-rate').value = state.settings.waterRate || 0;
+    document.getElementById('set-garbage').value = state.settings.garbageFee || 0;
+    document.getElementById('set-sewer').value = state.settings.sewerFee || 0;
+}
+
+function renderAll() {
+    renderDashboardSummary();
+    renderTenantDirectoryTable();
+    renderHistoricalIncomesLedger();
+    renderHistoricalExpensesLedger();
+    buildFilterOptions();
+    renderAnalysisWorkspace();
+}
+
+// ... [All your other functions: renderDashboardSummary, addTenant, generateAllBills, etc. remain the same] ...
+
+// INIT
 window.addEventListener('DOMContentLoaded', async () => {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('exp-date') && (document.getElementById('exp-date').value = today);
-    document.getElementById('inc-date') && (document.getElementById('inc-date').value = today);
+    if(document.getElementById('exp-date')) document.getElementById('exp-date').value = today;
+    if(document.getElementById('inc-date')) document.getElementById('inc-date').value = today;
 
     const cloudData = await loadFromCloud();
-    if (cloudData) state = cloudData;
+    if (cloudData) {
+        state = cloudData;
+        if (!state.expenses) state.expenses = [];
+        if (!state.incomes) state.incomes = [];
+    }
 
     applySettingsToUI();
     renderAll();
     setupNavigationListeners();
     toggleUnitSelector();
 });
-
-// === YOUR EXISTING FUNCTIONS GO HERE (addTenant, renderAll, etc.) ===
-// Paste all your other functions below this point without changes...</script>
+</script>
 </body>
 </html>
